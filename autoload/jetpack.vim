@@ -435,4 +435,5 @@ function! jetpack#experimental_get(name) abort
       return pkg
     endif
   endfor
+  return {}
 endfunction
