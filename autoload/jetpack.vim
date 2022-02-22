@@ -7,17 +7,6 @@
 let g:jetpack#optimization = 1
 let g:jetpack#njobs = 8
 
-if has('nvim')
-  let s:home = expand(stdpath('data') . '/site')
-elseif has('win32') || has('win64')
-  let s:home = expand('~/vimfiles')
-else
-  let s:home = expand('~/.vim')
-endif
-
-let s:optdir = { ->  s:path(s:home, '/pack/jetpack/opt') }
-let s:srcdir = { ->  s:path(s:home, '/pack/jetpack/src') }
-
 let s:pkgs = []
 let s:ignores = [
 \   '/doc/tags*',
@@ -181,6 +170,20 @@ function! jetpack#install(...) abort
   call s:jobwait(jobs, 0)
 endfunction
 
+function! jetpack#checkout(...) abort
+  for i in range(len(s:pkgs))
+    let pkg = s:pkgs[i]
+    call s:setbufline(1, printf('Checkout Plugins (%d / %d)', i, len(s:pkgs)))
+    call s:setbufline(2, s:progressbar((0.0 + i) / len(s:pkgs) * 100))
+    if (a:0 > 0 && index(a:000, pkg.name) < 0) || !isdirectory(pkg.pathname) || !has_key(pkg, 'commit')
+      call s:setbufline(i+3, printf('Skipped %s', pkg.name))
+      continue
+    endif
+    call system(printf('git -C "%s" switch "-"', pkg.pathname))
+    call system(printf('git -C "%s" checkout "%s"', pkg.pathname, pkg.commit))
+    call s:setbufline(i+3, printf('Checkout %s in %s', pkg.commit, pkg.name))
+  endfor
+endfunction
 function! jetpack#update(...) abort
   call s:setupbuf()
   let jobs = []
@@ -236,12 +239,12 @@ function! jetpack#bundle() abort
   let bundle = []
   let unbundle = s:pkgs
   if g:jetpack#optimization >= 1
-    let bundle = filter(copy(s:pkgs), 's:match(v:val["pathname"], s:srcdir()) && !get(v:val, "opt") && !has_key(v:val, "do")')
-    let unbundle = filter(copy(s:pkgs), 's:match(v:val["pathname"], s:srcdir()) && (get(v:val, "opt") || has_key(v:val, "do"))') 
+    let bundle = filter(copy(s:pkgs), 's:match(v:val["pathname"], s:srcdir) && !get(v:val, "opt") && !has_key(v:val, "do")')
+    let unbundle = filter(copy(s:pkgs), 's:match(v:val["pathname"], s:srcdir) && (get(v:val, "opt") || has_key(v:val, "do"))') 
   endif
 
-  call delete(s:optdir(), 'rf')
-  let destdir = s:path(s:optdir(), '_')
+  call delete(s:optdir, 'rf')
+  let destdir = s:path(s:optdir, '_')
   " Merge plugins if possible.
   let merged_count = 0
   let merged_files = {}
@@ -272,7 +275,7 @@ function! jetpack#bundle() abort
     call s:setbufline(1, printf('Copy Plugins (%d / %d)', i+merged_count, len(s:pkgs)))
     call s:setbufline(2, s:progressbar(1.0 * (i+merged_count) / len(s:pkgs) * 100))
     let srcdir = s:path(pkg.pathname, get(pkg, 'rtp', ''))
-    let destdir = s:path(s:optdir(), pkg.name)
+    let destdir = s:path(s:optdir, pkg.name)
     for srcfile in s:files(srcdir)
       let destfile = s:substitute(srcfile, srcdir, destdir)
       call s:copy(srcfile, s:substitute(srcfile, srcdir, destdir))
@@ -315,10 +318,10 @@ function! jetpack#postupdate() abort
       continue
     endif
     let pwd = getcwd()
-    if !s:match(pkg.pathname, s:srcdir())
+    if !s:match(pkg.pathname, s:srcdir)
       call chdir(pkg.pathname)
     else
-      call chdir(s:path(s:optdir(), pkg.name))
+      call chdir(s:path(s:optdir, pkg.name))
       execute 'silent! packadd ' . pkg.name
     endif
     if type(pkg.do) == v:t_func
@@ -341,6 +344,7 @@ function! jetpack#sync() abort
   call jetpack#clean()
   call jetpack#install()
   call jetpack#update()
+  call jetpack#checkout()
   call jetpack#bundle()
   call s:display()
   call jetpack#postupdate()
@@ -350,7 +354,7 @@ command! JetpackSync call jetpack#sync()
 function! jetpack#add(plugin, ...) abort
   let opts = a:0 > 0 ? a:1 : {}
   let name = get(opts, 'as', fnamemodify(a:plugin, ':t'))
-  let pathname = get(opts, 'dir', s:path(s:srcdir(),  name))
+  let pathname = get(opts, 'dir', s:path(s:srcdir,  name))
   let url = (a:plugin !~# ':' ? 'https://github.com/' : '') . a:plugin
   let opt = has_key(opts, 'for') || has_key(opts, 'on') || get(opts, 'opt')
   let pkg  = extend(opts, {
@@ -368,10 +372,19 @@ endfunction
 
 function! jetpack#begin(...) abort
   let s:pkgs = []
+  if has('nvim')
+    let s:home = expand(stdpath('data') . '/site')
+  elseif has('win32') || has('win64')
+    let s:home = expand('~/vimfiles')
+  else
+    let s:home = expand('~/.vim')
+  endif
   if a:0 != 0
     let s:home = a:1
     execute 'set packpath^=' . s:home
   endif
+  let s:optdir = s:path(s:home, '/pack/jetpack/opt')
+  let s:srcdir = s:path(s:home, '/pack/jetpack/src')
   command! -nargs=+ Jetpack call jetpack#add(<args>)
 endfunction
 
@@ -397,9 +410,9 @@ function! jetpack#end() abort
         endif
       endfor
       let event = substitute(substitute(pkg.name, '\W\+', '_', 'g'), '\(^\|_\)\(.\)', '\u\2', 'g')
-      let dir = escape(resolve(s:optdir()), '\')
+      let dir = escape(resolve(s:optdir), '\')
       execute printf('autocmd Jetpack SourcePost %s/%s/* doautocmd User Jetpack%s', dir, pkg.name, event)
-    elseif isdirectory(s:path(s:optdir(), pkg.name))
+    elseif isdirectory(s:path(s:optdir, pkg.name))
       execute 'silent! packadd! ' . pkg.name
     endif
   endfor
@@ -409,7 +422,7 @@ function! jetpack#end() abort
 endfunction
 
 function! jetpack#tap(name) abort
-  return filter(copy(s:pkgs), "v:val['name'] == a:name") != [] && isdirectory(s:path(s:srcdir(), a:name))
+  return filter(copy(s:pkgs), "v:val['name'] == a:name") != [] && isdirectory(s:path(s:srcdir, a:name))
 endfunction
 
 function! jetpack#experimental_list() abort

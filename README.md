@@ -76,19 +76,19 @@ Download jetpack.vim and put it in the `autoload` directory.
 
 ## Supported options
 
-vim-jetpack is 90% compatible with vim-plug.
+vim-jetpack is almost compatible with vim-plug.
 
-|      name       |        type        | description                           |
-| :-------------: | :----------------: | :------------------------------------ |
-| `branch`/ `tag` |      `sring`       | Branch/ tag of the repository to use  |
-|      `rtp`      |      `string`      | Subdirectory that contains Vim plugin |
-|      `dir`      |      `string`      | Custom directory for the plugin       |
-|      `as`       |      `string`      | Use different name for plugin         |
-|      `do`       | `string` or `func` | Post-update hook                      |
-|      `on`       | `string` or `list` | On-demand loading: Commands, `<Plug>` |
-|      `for`      | `string` or `list` | On-demand loading: File types         |
-|      `opt`      |     `boolean`      | On-demand loading: `packadd {name}`   |
-|    `frozen`     |     `boolean`      | Do not update                         |
+|           name            |        type        | description                                  |
+| :-----------------------: | :----------------: | :------------------------------------------- |
+| `branch`/ `tag`/ `commit` |      `sring`       | Branch/ tag/ commit of the repository to use |
+|           `rtp`           |      `string`      | Subdirectory that contains Vim plugin        |
+|           `dir`           |      `string`      | Custom directory for the plugin              |
+|           `as`            |      `string`      | Use different name for plugin                |
+|           `do`            | `string` or `func` | Post-update hook                             |
+|           `on`            | `string` or `list` | On-demand loading: Commands, `<Plug>`        |
+|           `for`           | `string` or `list` | On-demand loading: File types                |
+|           `opt`           |     `boolean`      | On-demand loading: `packadd {name}`          |
+|         `frozen`          |     `boolean`      | Do not update                                |
 
 Note that `on` option is only for the normal mode and visual mode.
 
