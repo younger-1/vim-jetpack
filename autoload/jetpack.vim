@@ -226,12 +226,6 @@ function! jetpack#clean() abort
       endif
     endif
   endfor
-  for dir in glob(s:srcdir() . '/*', '', 1)
-    let name = s:substitute(dir, s:srcdir(), '')
-    if empty(filter(s:pkgs, "v:val['name'] ==# name"))
-      call delete(dir, 'rf')
-    endif
-  endfor
 endfunction
 
 function! jetpack#bundle() abort
