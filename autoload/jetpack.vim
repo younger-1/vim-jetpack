@@ -31,7 +31,7 @@ if !exists('g:jetpack#ignores_patterns')
   \ ]
 endif
 
-let s:pkgs = []
+let s:pkgs = {}
 
 let s:progress_type = {
 \   'skip': 'skip',
@@ -145,8 +145,9 @@ endfunction
 function! jetpack#install(...) abort
   call s:setupbuf()
   let jobs = []
+  let pkgs = values(s:pkgs)
   for i in range(len(s:pkgs))
-    let pkg = s:pkgs[i]
+    let pkg = pkgs[i]
     call s:setbufline(1, printf('Install Plugins (%d / %d)', (len(jobs) - s:jobcount(jobs)), len(s:pkgs)))
     call s:setbufline(2, s:progressbar((0.0 + len(jobs) - s:jobcount(jobs)) / len(s:pkgs) * 100))
     call s:setbufline(i+3, printf('Installing %s ...', pkg.name))
@@ -179,8 +180,9 @@ endfunction
 
 function! jetpack#checkout(...) abort
   call s:setupbuf()
+  let pkgs = values(s:pkgs)
   for i in range(len(s:pkgs))
-    let pkg = s:pkgs[i]
+    let pkg = pkgs[i]
     call s:setbufline(1, printf('Checkout Plugins (%d / %d)', i, len(s:pkgs)))
     call s:setbufline(2, s:progressbar((0.0 + i) / len(s:pkgs) * 100))
     if (a:0 > 0 && index(a:000, pkg.name) < 0) || !isdirectory(pkg.pathname) || !has_key(pkg, 'commit')
@@ -196,8 +198,9 @@ endfunction
 function! jetpack#update(...) abort
   call s:setupbuf()
   let jobs = []
+  let pkgs = values(s:pkgs)
   for i in range(len(s:pkgs))
-    let pkg = s:pkgs[i]
+    let pkg = pkgs[i]
     call s:setbufline(1, printf('Update Plugins (%d / %d)', (len(jobs) - s:jobcount(jobs)), len(s:pkgs)))
     call s:setbufline(2, s:progressbar((0.0 + len(jobs) - s:jobcount(jobs)) / len(s:pkgs) * 100))
     call s:setbufline(i+3, printf('Updating %s ...', pkg.name))
@@ -222,7 +225,7 @@ function! jetpack#update(...) abort
 endfunction
 
 function! jetpack#clean() abort
-  for pkg in s:pkgs
+  for pkg in values(s:pkgs)
     if isdirectory(pkg.pathname) && has_key(pkg, 'commit')
       if system(printf('git -c "%s" cat-file -t %s', pkg.pathname, pkg.commit)) !~# 'commit'
         call delete(pkg.pathname)
@@ -240,10 +243,10 @@ endfunction
 function! jetpack#bundle() abort
   call s:setupbuf()
   let bundle = []
-  let unbundle = s:pkgs
+  let unbundle = values(s:pkgs)
   if g:jetpack#optimization >= 1
-    let bundle = filter(copy(s:pkgs), 's:match(v:val["pathname"], s:srcdir) && !get(v:val, "opt") && !has_key(v:val, "do")')
-    let unbundle = filter(copy(s:pkgs), 's:match(v:val["pathname"], s:srcdir) && (get(v:val, "opt") || has_key(v:val, "do"))') 
+    let bundle = filter(values(s:pkgs), 's:match(v:val["pathname"], s:srcdir) && !get(v:val, "opt") && !has_key(v:val, "do")')
+    let unbundle = filter(values(s:pkgs), 's:match(v:val["pathname"], s:srcdir) && (get(v:val, "opt") || has_key(v:val, "do"))') 
   endif
 
   call delete(s:optdir, 'rf')
@@ -295,7 +298,7 @@ function! s:display() abort
   let msg[s:progress_type.update] = 'Updated'
 
   let line_count = 1
-  for pkg in s:pkgs
+  for pkg in values(s:pkgs)
     let output = pkg.progress.output
     let output = substitute(output, '\r\n\|\r', '\n', 'g')
     let output = substitute(output, '^From.\{-}\zs\n\s*', '/compare/', '')
@@ -315,7 +318,7 @@ endfunction
 
 function! jetpack#postupdate() abort
   silent! packadd _
-  for pkg in s:pkgs
+  for pkg in values(s:pkgs)
     if !has_key(pkg, 'do')
       continue
     endif
@@ -369,11 +372,11 @@ function! jetpack#add(plugin, ...) abort
   \     'output': 'Skipped',
   \   },
   \ })
-  call add(s:pkgs, pkg)
+  let s:pkgs[name] = pkg
 endfunction
 
 function! jetpack#begin(...) abort
-  let s:pkgs = []
+  let s:pkgs = {}
   if has('nvim')
     let s:home = s:path(stdpath('data'), 'site')
   elseif has('win32') || has('win64')
@@ -397,7 +400,7 @@ function! jetpack#end() abort
   augroup Jetpack
     autocmd!
   augroup END
-  for pkg in s:pkgs
+  for pkg in values(s:pkgs)
     if pkg.opt
       for it in flatten([get(pkg, 'for', [])])
         execute printf('autocmd Jetpack FileType %s ++nested silent! packadd %s', it, pkg.name)
@@ -424,18 +427,13 @@ function! jetpack#end() abort
 endfunction
 
 function! jetpack#tap(name) abort
-  return filter(copy(s:pkgs), "v:val['name'] == a:name") != [] && isdirectory(s:path(s:srcdir, a:name))
+  return has_key(s:pkgs, a:name) && isdirectory(s:pkgs[a:name].pathname)
 endfunction
 
 function! jetpack#experimental_list() abort
-  return map(copy(s:pkgs), 'v:val["name"]')
+  return map(values(s:pkgs), 'v:val["name"]')
 endfunction
 
 function! jetpack#experimental_get(name) abort
-  for pkg in s:pkgs
-    if pkg.name ==# a:name
-      return pkg
-    endif
-  endfor
-  return {}
+  return get(s:pkgs, a:name, {})
 endfunction
