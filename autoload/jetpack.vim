@@ -4,28 +4,34 @@
 "          All Rights Reserved.
 "=============================================
 
-let g:jetpack#optimization = 1
-let g:jetpack#njobs = 8
+if !exists('g:jetpack#optimization')
+  let g:jetpack#optimization = 1
+endif
+
+if !exists('g:jetpack#njobs')
+  let g:jetpack#njobs = 8
+endif
+
+if !exists('g:jetpack#ignores_patterns')
+  let g:jetpack#ignore_patterns = [
+  \   '/.*',
+  \   '/.*/**/*',
+  \   '/t/**/*',
+  \   '/test/**/*',
+  \   '/Makefile*',
+  \   '/Gemfile*',
+  \   '/Rakefile*',
+  \   '/VimFlavor*',
+  \   '/README*',
+  \   '/LICENSE*',
+  \   '/LICENCE*',
+  \   '/CONTRIBUTING*',
+  \   '/CHANGELOG*',
+  \   '/NEWS*',
+  \ ]
+endif
 
 let s:pkgs = []
-let s:ignores = [
-\   '/doc/tags*',
-\   '/.*',
-\   '/.*/**/*',
-\   '/t/**/*',
-\   '/test/**/*',
-\   '/VimFlavor*',
-\   '/Flavorfile*',
-\   '/README*',
-\   '/Rakefile*',
-\   '/Gemfile*',
-\   '/Makefile*',
-\   '/LICENSE*',
-\   '/LICENCE*',
-\   '/CONTRIBUTING*',
-\   '/CHANGELOG*',
-\   '/NEWS*',
-\ ]
 
 let s:progress_type = {
 \   'skip': 'skip',
@@ -38,7 +44,7 @@ function s:path(...)
 endfunction
 
 function s:match(a, b)
-  return a:a =~# '\V'.escape(a:b, '\')
+  return a:a =~# ('\V'.escape(a:b, '\'))
 endfunction
 
 function s:substitute(a, b, c)
@@ -50,7 +56,7 @@ function! s:files(path) abort
 endfunction
 
 function! s:ignorable(filename) abort
-  return filter(copy(s:ignores), 'a:filename =~? glob2regpat(v:val)') != []
+  return filter(copy(g:jetpack#ignore_patterns), 'a:filename =~? glob2regpat(v:val)') != []
 endfunction
 
 function! s:progressbar(n) abort
@@ -107,9 +113,10 @@ endif
 
 function! s:copy(from, to) abort
   call mkdir(fnamemodify(a:to, ':p:h'), 'p')
-  if has('nvim')
+  let doc = a:from =~# '**/doc/tags*'
+  if has('nvim') && !doc
     call v:lua.vim.loop.fs_link(a:from, a:to)
-  elseif has('unix')
+  elseif has('unix') && !doc
     call system(printf('ln -f "%s" "%s"', a:from, a:to))
   else
     call writefile(readfile(a:from, 'b'), a:to, 'b')
@@ -118,13 +125,13 @@ function! s:copy(from, to) abort
 endfunction
 
 function! s:setbufline(lnum, text, ...) abort
-  call setbufline('JetpackStatus', a:lnum, a:text)
+  call setbufline(bufnr('JetpackStatus'), a:lnum, a:text)
   redraw
 endfunction
 
 function! s:setupbuf() abort
-  silent! execute 'bdelete! ' . bufnr('JetpackStatus')
-  silent 40vnew +setlocal\ buftype=nofile\ nobuflisted\ noswapfile\ nonumber\ nowrap JetpackStatus
+  execute 'silent! bdelete! ' . bufnr('JetpackStatus')
+  40vnew +setlocal\ buftype=nofile\ nobuflisted\ noswapfile\ nonumber\ nowrap JetpackStatus
   syntax clear
   syntax match jetpackProgress /^[A-Z][a-z]*ing/
   syntax match jetpackComplete /^[A-Z][a-z]*ed/
@@ -171,6 +178,7 @@ function! jetpack#install(...) abort
 endfunction
 
 function! jetpack#checkout(...) abort
+  call s:setupbuf()
   for i in range(len(s:pkgs))
     let pkg = s:pkgs[i]
     call s:setbufline(1, printf('Checkout Plugins (%d / %d)', i, len(s:pkgs)))
@@ -184,6 +192,7 @@ function! jetpack#checkout(...) abort
     call s:setbufline(i+3, printf('Checkout %s in %s', pkg.commit, pkg.name))
   endfor
 endfunction
+
 function! jetpack#update(...) abort
   call s:setupbuf()
   let jobs = []
@@ -280,7 +289,6 @@ endfunction
 
 function! s:display() abort
   call s:setupbuf()
-
   let msg = {}
   let msg[s:progress_type.skip] = 'Skipped'
   let msg[s:progress_type.install] = 'Installed'
@@ -367,18 +375,18 @@ endfunction
 function! jetpack#begin(...) abort
   let s:pkgs = []
   if has('nvim')
-    let s:home = expand(stdpath('data') . '/site')
+    let s:home = s:path(stdpath('data'), 'site')
   elseif has('win32') || has('win64')
     let s:home = expand('~/vimfiles')
   else
     let s:home = expand('~/.vim')
   endif
   if a:0 != 0
-    let s:home = a:1
+    let s:home = expand(a:1)
     execute 'set packpath^=' . s:home
   endif
-  let s:optdir = s:path(s:home, '/pack/jetpack/opt')
-  let s:srcdir = s:path(s:home, '/pack/jetpack/src')
+  let s:optdir = s:path(s:home, 'pack', 'jetpack', 'opt')
+  let s:srcdir = s:path(s:home, 'pack', 'jetpack', 'src')
   command! -nargs=+ Jetpack call jetpack#add(<args>)
 endfunction
 
@@ -396,16 +404,16 @@ function! jetpack#end() abort
       endfor
       for it in flatten([get(pkg, 'on', [])])
         if it =~? '^<Plug>'
-          execute printf("nnoremap %s :execute '".'silent! packadd %s \| call feedkeys("\%s")'."'<CR>", it, pkg.name, it)
-          execute printf("vnoremap %s :<C-U>execute '".'silent! packadd %s \| call feedkeys("gv\%s")'."'<CR>", it, pkg.name, it)
+          for m in ['n', 'o', 'v', 'i']
+            execute printf('%smap %s <Cmd>silent! packadd %s<CR>%s', m, it, pkg.name, it)
+          endfor
         else
           let cmd = substitute(it, '^:', '', '')
           execute printf('autocmd Jetpack CmdUndefined %s ++nested silent! packadd %s', cmd, pkg.name)
         endif
       endfor
       let event = substitute(substitute(pkg.name, '\W\+', '_', 'g'), '\(^\|_\)\(.\)', '\u\2', 'g')
-      let dir = escape(resolve(s:optdir), '\')
-      execute printf('autocmd Jetpack SourcePost %s/%s/* doautocmd User Jetpack%s', dir, pkg.name, event)
+      execute printf('autocmd Jetpack SourcePost **/pack/jetpack/opt/%s/* doautocmd User Jetpack%s', pkg.name, event)
     elseif isdirectory(s:path(s:optdir, pkg.name))
       execute 'silent! packadd! ' . pkg.name
     endif
