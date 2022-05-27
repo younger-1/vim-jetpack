@@ -295,7 +295,11 @@ function! jetpack#bundle() abort
   for [pkg_name, pkg] in items(bundle)
     call s:setbufline(1, printf('Merging Plugins (%d / %d)', merged_count, len(s:packages)))
     call s:setbufline(2, s:progressbar(1.0 * merged_count / len(s:packages) * 100))
-    let srcdir = s:path(pkg.path, get(pkg, 'rtp', ''))
+    if get(pkg, 'rtp')
+      let srcdir = s:path(pkg.path, get(pkg, 'rtp'))
+    else
+      let srcdir = pkg.path
+    endif
 
     let files = map(s:files(srcdir), {_, file -> file[len(srcdir):]})
     let files = filter(files, { _, file -> !s:ignorable(file) })
