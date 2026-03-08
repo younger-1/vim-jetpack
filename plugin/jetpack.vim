@@ -27,15 +27,24 @@ let g:loaded_jetpack = 1
 
 if has('nvim')
   function! jetpack#execute(code) abort
+    if type(a:code) != v:t_string || empty(a:code)
+      return ''
+    endif
     return v:lua.vim.cmd(a:code)
   endfunction
 elseif has('lua')
   function! jetpack#execute(code) abort
+    if type(a:code) != v:t_string || empty(a:code)
+      return ''
+    endif
     let g:jetpack_code = a:code
     lua vim.command(vim.eval('g:jetpack_code'))
   endfunction
 elseif has('patch-8.2.4594')
   function! jetpack#execute(code) abort
+    if type(a:code) != v:t_string || empty(a:code)
+      return ''
+    endif
     let c = bufnr()
     let t = bufadd('')
     execute 'silent buffer' t
@@ -46,6 +55,9 @@ elseif has('patch-8.2.4594')
   endfunction
 else
   function! jetpack#execute(code) abort
+    if type(a:code) != v:t_string || empty(a:code)
+      return ''
+    endif
     let temp = tempname()
     call writefile(split(a:code, "\n"), temp)
     execute 'source' temp
@@ -788,7 +800,10 @@ function! jetpack#get(name) abort
   return get(s:declared_packages, a:name, {})
 endfunction
 
-if !has('nvim') && !(has('lua') && has('patch-8.2.0775'))
+" Only enable the Lua compatibility layer on Neovim.
+" Some Vim builds (even with Lua) trigger "attempt to call a nil value"
+" during this block. Jetpack works without this layer on Vim.
+if !has('nvim')
   finish
 endif
 
